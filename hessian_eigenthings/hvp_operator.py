@@ -36,12 +36,12 @@ class HVPOperator(Operator):
         full_dataset: bool = True,
         max_possible_gpu_samples: int = 256,
     ):
-        size = int(sum(p.numel() for p in model.parameters()))
+        size = int(sum(p.numel() for p in model.trainable_parameters()))
         super(HVPOperator, self).__init__(size)
         self.grad_vec = torch.zeros(size)
         self.model = model
         if use_gpu:
-            self.model = self.model.cuda()
+            self.model = self.model.to_cuda()
         self.dataloader = dataloader
         # Make a copy since we will go over it a bunch
         self.dataloader_iter = iter(dataloader)
@@ -75,7 +75,7 @@ class HVPOperator(Operator):
         # take the second gradient
         # this is the derivative of <grad_vec, v> where <,> is an inner product.
         hessian_vec_prod_dict = torch.autograd.grad(
-            grad_vec, self.model.parameters(), grad_outputs=vec, only_inputs=True
+            grad_vec, self.model.trainable_parameters(), grad_outputs=vec, only_inputs=True, allow_unused=True
         )
         # concatenate the results over the different components of the network
         hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hessian_vec_prod_dict])
@@ -101,19 +101,32 @@ class HVPOperator(Operator):
         """
         Zeros out the gradient info for each parameter in the model
         """
-        for p in self.model.parameters():
+        for p in self.model.trainable_parameters():
             if p.grad is not None:
                 p.grad.data.zero_()
+    @staticmethod
+    def _chunk_tasklist(task_list, num_chunks, chunk_size):
+        task_chunks = []
+        count = 0
+        tot = len(task_list)
+        for i in range(num_chunks):
+            if count + chunk_size > tot:
+                task_chunks += [task_list[count:]]
+            else: 
+                task_chunks += [task_list[count:count+chunk_size]]
+                count+=chunk_size
+        return task_chunks
+
 
     def _prepare_grad(self) -> torch.Tensor:
         """
         Compute gradient w.r.t loss over all parameters and vectorize
         """
         try:
-            all_inputs, all_targets = next(self.dataloader_iter)
+            all_inputs, all_targets, all_tasks = next(self.dataloader_iter)
         except StopIteration:
             self.dataloader_iter = iter(self.dataloader)
-            all_inputs, all_targets = next(self.dataloader_iter)
+            all_inputs, all_targets, all_tasks = next(self.dataloader_iter)
 
         num_chunks = max(1, len(all_inputs) // self.max_possible_gpu_samples)
 
@@ -123,17 +136,21 @@ class HVPOperator(Operator):
         # when the batch size is larger than what will fit in memory.
         # WARNING: this may interact poorly with batch normalization.
 
+        #----- this part has been modified by GL to make it compatible with the multi-task setting ----
         input_microbatches = all_inputs.chunk(num_chunks)
         target_microbatches = all_targets.chunk(num_chunks)
-        for input, target in zip(input_microbatches, target_microbatches):
+        tasks_microbatches = self._chunk_tasklist(all_tasks, \
+            num_chunks = len(target_microbatches), chunk_size=target_microbatches[0].size(0))
+        for input, target, task in zip(input_microbatches, target_microbatches, tasks_microbatches):
             if self.use_gpu:
                 input = input.cuda()
                 target = target.cuda()
 
-            output = self.model(input)
-            loss = self.criterion(output, target)
+            # output = self.model(input)
+            # loss = self.criterion(output, target)
+            loss, out = self.model.loss_and_outputs(input, target, task, validation=False)
             grad_dict = torch.autograd.grad(
-                loss, self.model.parameters(), create_graph=True
+                loss, self.model.trainable_parameters(), create_graph=True, allow_unused=True
             )
             if grad_vec is not None:
                 grad_vec += torch.cat([g.contiguous().view(-1) for g in grad_dict])

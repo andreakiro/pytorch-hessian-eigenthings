@@ -15,8 +15,8 @@ from hessian_eigenthings.operator import Operator
 def lanczos(
     operator: Operator,
     num_eigenthings: int =10,
-    which: str ="LM",
-    max_steps: int =20,
+    which: str ="LA",
+    max_steps: int =20, #TODO: CHECK 
     tol: float =1e-6,
     num_lanczos_vectors: int =None,
     init_vec: np.ndarray =None,

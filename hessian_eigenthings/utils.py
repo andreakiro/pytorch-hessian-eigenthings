@@ -10,7 +10,7 @@ term_width = shutil.get_terminal_size().columns
 
 
 def log(msg):
-    logging.info("[hessian_eigenthings] " + str(msg))
+    print("[hessian_eigenthings] " + str(msg))
 
 
 def maybe_fp16(vec, fp16):
