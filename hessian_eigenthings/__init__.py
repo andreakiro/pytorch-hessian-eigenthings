@@ -15,7 +15,7 @@ def compute_hessian_eigenthings(
     mode="power_iter",
     use_gpu=True,
     fp16=False,
-    max_possible_gpu_samples=2 ** 16,
+    max_possible_gpu_samples=2**16,
     **kwargs
 ):
     """

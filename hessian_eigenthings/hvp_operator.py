@@ -51,8 +51,10 @@ class HVPOperator(Operator):
         self.full_dataset = full_dataset
         self.max_possible_gpu_samples = max_possible_gpu_samples
 
-        if not hasattr(self.dataloader, '__len__') and self.full_dataset:
-            raise ValueError("For full-dataset averaging, dataloader must have '__len__'")
+        if not hasattr(self.dataloader, "__len__") and self.full_dataset:
+            raise ValueError(
+                "For full-dataset averaging, dataloader must have '__len__'"
+            )
 
     def apply(self, vec: torch.Tensor):
         """
@@ -75,10 +77,16 @@ class HVPOperator(Operator):
         # take the second gradient
         # this is the derivative of <grad_vec, v> where <,> is an inner product.
         hessian_vec_prod_dict = torch.autograd.grad(
-            grad_vec, self.model.trainable_parameters(), grad_outputs=vec, only_inputs=True, allow_unused=True
+            grad_vec,
+            self.model.trainable_parameters(),
+            grad_outputs=vec,
+            only_inputs=True,
+            allow_unused=True,
         )
         # concatenate the results over the different components of the network
-        hessian_vec_prod = torch.cat([g.contiguous().view(-1) for g in hessian_vec_prod_dict])
+        hessian_vec_prod = torch.cat(
+            [g.contiguous().view(-1) for g in hessian_vec_prod_dict]
+        )
         hessian_vec_prod = utils.maybe_fp16(hessian_vec_prod, self.fp16)
         return hessian_vec_prod
 
@@ -104,6 +112,7 @@ class HVPOperator(Operator):
         for p in self.model.trainable_parameters():
             if p.grad is not None:
                 p.grad.data.zero_()
+
     @staticmethod
     def _chunk_tasklist(task_list, num_chunks, chunk_size):
         task_chunks = []
@@ -112,11 +121,10 @@ class HVPOperator(Operator):
         for i in range(num_chunks):
             if count + chunk_size > tot:
                 task_chunks += [task_list[count:]]
-            else: 
-                task_chunks += [task_list[count:count+chunk_size]]
-                count+=chunk_size
+            else:
+                task_chunks += [task_list[count : count + chunk_size]]
+                count += chunk_size
         return task_chunks
-
 
     def _prepare_grad(self) -> torch.Tensor:
         """
@@ -136,21 +144,31 @@ class HVPOperator(Operator):
         # when the batch size is larger than what will fit in memory.
         # WARNING: this may interact poorly with batch normalization.
 
-        #----- this part has been modified by GL to make it compatible with the multi-task setting ----
+        # ----- this part has been modified by GL to make it compatible with the multi-task setting ----
         input_microbatches = all_inputs.chunk(num_chunks)
         target_microbatches = all_targets.chunk(num_chunks)
-        tasks_microbatches = self._chunk_tasklist(all_tasks, \
-            num_chunks = len(target_microbatches), chunk_size=target_microbatches[0].size(0))
-        for input, target, task in zip(input_microbatches, target_microbatches, tasks_microbatches):
+        tasks_microbatches = self._chunk_tasklist(
+            all_tasks,
+            num_chunks=len(target_microbatches),
+            chunk_size=target_microbatches[0].size(0),
+        )
+        for input, target, task in zip(
+            input_microbatches, target_microbatches, tasks_microbatches
+        ):
             if self.use_gpu:
                 input = input.cuda()
                 target = target.cuda()
 
             # output = self.model(input)
             # loss = self.criterion(output, target)
-            loss, out = self.model.loss_and_outputs(input, target, task, validation=False)
+            loss, out = self.model.loss_and_outputs(
+                input, target, task, validation=False
+            )
             grad_dict = torch.autograd.grad(
-                loss, self.model.trainable_parameters(), create_graph=True, allow_unused=True
+                loss,
+                self.model.trainable_parameters(),
+                create_graph=True,
+                allow_unused=True,
             )
             if grad_vec is not None:
                 grad_vec += torch.cat([g.contiguous().view(-1) for g in grad_dict])

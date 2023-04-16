@@ -14,14 +14,14 @@ from hessian_eigenthings.operator import Operator
 
 def lanczos(
     operator: Operator,
-    num_eigenthings: int =10,
-    which: str ="LA",
-    max_steps: int =20, #TODO: CHECK 
-    tol: float =1e-6,
-    num_lanczos_vectors: int =None,
-    init_vec: np.ndarray =None,
-    use_gpu: bool =False,
-    fp16: bool =False,
+    num_eigenthings: int = 10,
+    which: str = "LA",
+    max_steps: int = 20,  # TODO: CHECK
+    tol: float = 1e-6,
+    num_lanczos_vectors: int = None,
+    init_vec: np.ndarray = None,
+    use_gpu: bool = False,
+    fp16: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Use the scipy.sparse.linalg.eigsh hook to the ARPACK lanczos algorithm

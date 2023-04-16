@@ -1,5 +1,4 @@
 """ small helpers """
-import logging
 import shutil
 import sys
 import time
@@ -22,7 +21,7 @@ begin_time = last_time
 
 
 def format_time(seconds):
-    """ converts seconds into day-hour-minute-second-ms string format """
+    """converts seconds into day-hour-minute-second-ms string format"""
     days = int(seconds / 3600 / 24)
     seconds = seconds - days * 3600 * 24
     hours = int(seconds / 3600)
